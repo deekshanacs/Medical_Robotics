@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediSort Robotic Simulation Core</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Poppins:wght@400;600;700&display=swap');
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #fafafa;
+      font-family: 'Poppins', sans-serif;
+      color: #1a1a1a;
+    }
+
+    #hud-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border: 2px solid #f4f4f5;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.01);
+      border-radius: 24px;
+    }
+
+    .hud-title {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: #a1a1aa;
+      opacity: 0.6;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: calc(100% - 40px);
+    }
+
+    .hud-grid {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(255, 213, 107, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 213, 107, 0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* SVG styling */
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Animation effects */
+    @keyframes laser-sweep {
+      0%, 100% { transform: translateY(0px) scaleY(1); opacity: 0.7; }
+      50% { transform: translateY(3px) scaleY(1.03); opacity: 0.9; }
+    }
+
+    .laser-active {
+      animation: laser-sweep 0.2s infinite alternate;
+    }
+
+    .glowing-path {
+      stroke-dasharray: 8, 8;
+      animation: dash 5s linear infinite;
+    }
+
+    @keyframes dash {
+      to {
+        stroke-dashoffset: -80;
+      }
+    }
+
+    .eye-pulse {
+      animation: eye-glow 2s infinite alternate;
+    }
+
+    @keyframes eye-glow {
+      0% { filter: drop-shadow(0 0 1px rgba(255, 213, 107, 0.5)); }
+      100% { filter: drop-shadow(0 0 5px rgba(255, 213, 107, 0.9)); }
+    }
+  </style>
+</head>
+<body>
+  <div id="hud-layer">
+    <div class="hud-grid"></div>
+    <div class="hud-title">MediSort Robocore v4.2 // CLASSIFIER MODULE</div>
+  </div>
+
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMax meet">
+    <!-- SVG Definitions for filters and gradients -->
+    <defs>
+      <!-- Soft Yellow Accent Glow -->
+      <filter id="yellow-glow" x="-25%" y="-25%" width="150%" height="150%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+        <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur2" />
+        <feMerge>
+          <feMergeNode in="blur1" />
+          <feMergeNode in="blur2" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+
+      <!-- Laser Scanner Glow (Amber/Yellow) -->
+      <filter id="laser-glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+
+      <!-- Torso Drop Shadow -->
+      <filter id="torso-shadow" x="-10%" y="-10%" width="120%" height="120%">
+        <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#1a1a1a" flood-opacity="0.05" />
+      </filter>
+
+      <!-- Glass Tablet Gradient -->
+      <linearGradient id="tablet-glass" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#2d3748" />
+        <stop offset="100%" stop-color="#1a1a1a" />
+      </linearGradient>
+
+      <!-- Robot Metallic Accent Gradient -->
+      <linearGradient id="metal-accent" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#d1d5db" />
+        <stop offset="100%" stop-color="#9ca3af" />
+      </linearGradient>
+    </defs>
+
+    <!-- Visual Grid Crosshairs -->
+    <g opacity="0.3">
+      <circle cx="50" cy="50" r="15" fill="none" stroke="#e4e4e7" stroke-width="1" />
+      <line x1="50" y1="30" x2="50" y2="70" stroke="#e4e4e7" stroke-width="1" />
+      <line x1="30" y1="50" x2="70" y2="50" stroke="#e4e4e7" stroke-width="1" />
+    </g>
+
+    <!-- 2. LOCOMOTION SCENE BACKGROUND (Hospital Corridor) -->
+    <g id="locomotion-scene" style="display: none;">
+      <!-- Wall Background -->
+      <rect x="-1000" y="0" width="4000" height="360" fill="#f0f4f8" />
+      <!-- Hospital Blue wall bottom stripe -->
+      <rect x="-1000" y="320" width="4000" height="40" fill="#3b82f6" opacity="0.8" />
+      <!-- Floor Background -->
+      <rect x="-1000" y="360" width="4000" height="240" fill="#e2e8f0" />
+      <!-- Floor lines (horizontal perspective lines) -->
+      <line x1="-1000" y1="420" x2="3000" y2="420" stroke="#cbd5e1" stroke-width="1.5" />
+      <line x1="-1000" y1="480" x2="3000" y2="480" stroke="#cbd5e1" stroke-width="1.5" />
+      <line x1="-1000" y1="540" x2="3000" y2="540" stroke="#cbd5e1" stroke-width="1.5" />
+      
+      <!-- Parallax Background Layer (scrolls slower at 40% speed, loops at 800px) -->
+      <g id="corridor-bg-parallax" transform="translate(0, 0)">
+        <!-- Distant Windows (repeating every 800px) -->
+        <g opacity="0.8">
+          <!-- Segment 0-800 -->
+          <rect x="100" y="60" width="160" height="120" rx="8" fill="#e2e8f0" />
+          <rect x="105" y="65" width="150" height="110" rx="6" fill="#eff6ff" />
+          <line x1="180" y1="65" x2="180" y2="175" stroke="#cbd5e1" stroke-width="2" />
+          <line x1="105" y1="120" x2="255" y2="120" stroke="#cbd5e1" stroke-width="2" />
+          
+          <rect x="500" y="60" width="160" height="120" rx="8" fill="#e2e8f0" />
+          <rect x="505" y="65" width="150" height="110" rx="6" fill="#eff6ff" />
+          <line x1="580" y1="65" x2="580" y2="175" stroke="#cbd5e1" stroke-width="2" />
+          <line x1="505" y1="120" x2="655" y2="120" stroke="#cbd5e1" stroke-width="2" />
+
+          <!-- Segment 800-1600 -->
+          <rect x="900" y="60" width="160" height="120" rx="8" fill="#e2e8f0" />
+          <rect x="905" y="65" width="150" height="110" rx="6" fill="#eff6ff" />
+          <line x1="980" y1="65" x2="980" y2="175" stroke="#cbd5e1" stroke-width="2" />
+          <line x1="905" y1="120" x2="1055" y2="120" stroke="#cbd5e1" stroke-width="2" />
+          
+          <rect x="1300" y="60" width="160" height="120" rx="8" fill="#e2e8f0" />
+          <rect x="1305" y="65" width="150" height="110" rx="6" fill="#eff6ff" />
+          <line x1="1380" y1="65" x2="1380" y2="175" stroke="#cbd5e1" stroke-width="2" />
+          <line x1="1305" y1="120" x2="1455" y2="120" stroke="#cbd5e1" stroke-width="2" />
+
+          <!-- Segment 1600-2400 -->
+          <rect x="1700" y="60" width="160" height="120" rx="8" fill="#e2e8f0" />
+          <rect x="1705" y="65" width="150" height="110" rx="6" fill="#eff6ff" />
+          <line x1="1780" y1="65" x2="1780" y2="175" stroke="#cbd5e1" stroke-width="2" />
+          <line x1="1705" y1="120" x2="1855" y2="120" stroke="#cbd5e1" stroke-width="2" />
+          
+          <rect x="2100" y="60" width="160" height="120" rx="8" fill="#e2e8f0" />
+          <rect x="2105" y="65" width="150" height="110" rx="6" fill="#eff6ff" />
+          <line x1="2180" y1="65" x2="2180" y2="175" stroke="#cbd5e1" stroke-width="2" />
+          <line x1="2105" y1="120" x2="2255" y2="120" stroke="#cbd5e1" stroke-width="2" />
+
+          <!-- Segment 2400-3200 -->
+          <rect x="2500" y="60" width="160" height="120" rx="8" fill="#e2e8f0" />
+          <rect x="2505" y="65" width="150" height="110" rx="6" fill="#eff6ff" />
+          <line x1="2580" y1="65" x2="2580" y2="175" stroke="#cbd5e1" stroke-width="2" />
+          <line x1="2505" y1="120" x2="2655" y2="120" stroke="#cbd5e1" stroke-width="2" />
+        </g>
+        <!-- Wall Pillars (repeating every 800px) -->
+        <g opacity="0.6">
+          <!-- Segment 0-800 -->
+          <rect x="340" y="0" width="40" height="360" fill="#cbd5e1" />
+          <rect x="380" y="0" width="10" height="360" fill="#9ca3af" opacity="0.5" />
+          <rect x="740" y="0" width="40" height="360" fill="#cbd5e1" />
+          <rect x="780" y="0" width="10" height="360" fill="#9ca3af" opacity="0.5" />
+          
+          <!-- Segment 800-1600 -->
+          <rect x="1140" y="0" width="40" height="360" fill="#cbd5e1" />
+          <rect x="1180" y="0" width="10" height="360" fill="#9ca3af" opacity="0.5" />
+          <rect x="1540" y="0" width="40" height="360" fill="#cbd5e1" />
+          <rect x="1580" y="0" width="10" height="360" fill="#9ca3af" opacity="0.5" />
+
+          <!-- Segment 1600-2400 -->
+          <rect x="1940" y="0" width="40" height="360" fill="#cbd5e1" />
+          <rect x="1980" y="0" width="10" height="360" fill="#9ca3af" opacity="0.5" />
+          <rect x="2340" y="0" width="40" height="360" fill="#cbd5e1" />
+          <rect x="2380" y="0" width="10" height="360" fill="#9ca3af" opacity="0.5" />
+
+          <!-- Segment 2400-3200 -->
+          <rect x="2740" y="0" width="40" height="360" fill="#cbd5e1" />
+          <rect x="2780" y="0" width="10" height="360" fill="#9ca3af" opacity="0.5" />
+        </g>
+      </g>
+      
+      <!-- Scrolling elements container (scrolls at full speed, loops at 2000px) -->
+      <g id="scrolling-corridor" transform="translate(0, 0)">
+        <!-- Floor Tiling Joints -->
+        <g stroke="#cbd5e1" stroke-width="1.5" opacity="0.4">
+          <line x1="0" y1="360" x2="0" y2="600" />
+          <line x1="200" y1="360" x2="200" y2="600" />
+          <line x1="400" y1="360" x2="400" y2="600" />
+          <line x1="600" y1="360" x2="600" y2="600" />
+          <line x1="800" y1="360" x2="800" y2="600" />
+          <line x1="1000" y1="360" x2="1000" y2="600" />
+          <line x1="1200" y1="360" x2="1200" y2="600" />
+          <line x1="1400" y1="360" x2="1400" y2="600" />
+          <line x1="1600" y1="360" x2="1600" y2="600" />
+          <line x1="1800" y1="360" x2="1800" y2="600" />
+          <line x1="2000" y1="360" x2="2000" y2="600" />
+          <line x1="2200" y1="360" x2="2200" y2="600" />
+          <line x1="2400" y1="360" x2="2400" y2="600" />
+          <line x1="2600" y1="360" x2="2600" y2="600" />
+          <line x1="2800" y1="360" x2="2800" y2="600" />
+        </g>
+
+        <!-- Segment 0-2000 -->
+        <!-- Door 1 -->
+        <g transform="translate(150, 140)">
+          <rect x="0" y="0" width="100" height="220" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+          <rect x="10" y="10" width="80" height="90" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1" />
+          <circle cx="85" cy="110" r="4" fill="#9ca3af" />
+          <rect x="35" y="45" width="30" height="8" rx="2" fill="#3b82f6" />
+          <text x="50" y="51" font-family="'Share Tech Mono'" font-size="6" fill="#ffffff" text-anchor="middle">ROOM 101</text>
+        </g>
+        
+        <!-- Safety Sign -->
+        <g transform="translate(420, 160)">
+          <rect x="0" y="0" width="40" height="50" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+          <rect x="4" y="4" width="32" height="10" fill="#ef4444" rx="2" />
+          <text x="20" y="11" font-family="'Share Tech Mono'" font-size="5" fill="#ffffff" text-anchor="middle" font-weight="bold">BIOHAZARD</text>
+          <circle cx="20" cy="32" r="10" fill="none" stroke="#ef4444" stroke-width="1.5" />
+          <circle cx="20" cy="32" r="4" fill="none" stroke="#ef4444" stroke-width="1" />
+        </g>
+
+        <!-- Sanitizer Station -->
+        <g transform="translate(540, 180)">
+          <rect x="0" y="0" width="16" height="36" rx="2" fill="#cbd5e1" />
+          <rect x="3" y="4" width="10" height="18" rx="1" fill="#ffffff" />
+          <rect x="5" y="24" width="6" height="4" fill="#3b82f6" />
+          <path d="M 8 28 L 8 32" stroke="#3b82f6" stroke-width="1.5" />
+        </g>
+
+        <!-- Door 2 -->
+        <g transform="translate(750, 140)">
+          <rect x="0" y="0" width="100" height="220" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+          <rect x="10" y="10" width="80" height="90" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1" />
+          <circle cx="15" cy="110" r="4" fill="#9ca3af" />
+          <rect x="35" y="45" width="30" height="8" rx="2" fill="#3b82f6" />
+          <text x="50" y="51" font-family="'Share Tech Mono'" font-size="6" fill="#ffffff" text-anchor="middle">ROOM 102</text>
+        </g>
+        
+        <!-- Hospital Plaque -->
+        <g transform="translate(950, 160)">
+          <rect x="0" y="0" width="50" height="30" rx="3" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="1" />
+          <text x="25" y="12" font-family="'Share Tech Mono'" font-size="5" fill="#ffd56b" text-anchor="middle">⚠️ SILENCE</text>
+          <text x="25" y="22" font-family="'Share Tech Mono'" font-size="4" fill="#ffffff" text-anchor="middle">PATIENT WARD</text>
+        </g>
+
+        <!-- Door 3 -->
+        <g transform="translate(1250, 140)">
+          <rect x="0" y="0" width="100" height="220" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+          <rect x="10" y="10" width="80" height="90" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1" />
+          <circle cx="85" cy="110" r="4" fill="#9ca3af" />
+          <rect x="35" y="45" width="30" height="8" rx="2" fill="#10b981" />
+          <text x="50" y="51" font-family="'Share Tech Mono'" font-size="6" fill="#ffffff" text-anchor="middle">CLINIC LAB</text>
+        </g>
+
+        <!-- Sanitizer Station 2 -->
+        <g transform="translate(1450, 180)">
+          <rect x="0" y="0" width="16" height="36" rx="2" fill="#cbd5e1" />
+          <rect x="3" y="4" width="10" height="18" rx="1" fill="#ffffff" />
+          <rect x="5" y="24" width="6" height="4" fill="#3b82f6" />
+          <path d="M 8 28 L 8 32" stroke="#3b82f6" stroke-width="1.5" />
+        </g>
+
+        <!-- Door 4 (ICU) -->
+        <g transform="translate(1700, 140)">
+          <rect x="0" y="0" width="100" height="220" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+          <rect x="10" y="10" width="80" height="90" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1" />
+          <circle cx="15" cy="110" r="4" fill="#9ca3af" />
+          <rect x="35" y="45" width="30" height="8" rx="2" fill="#ef4444" />
+          <text x="50" y="51" font-family="'Share Tech Mono'" font-size="6" fill="#ffffff" text-anchor="middle">I.C.U.</text>
+        </g>
+
+        <!-- Segment 2000-4000 (Duplicate copies for seamless looping) -->
+        <!-- Door 1 Copy -->
+        <g transform="translate(2150, 140)">
+          <rect x="0" y="0" width="100" height="220" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+          <rect x="10" y="10" width="80" height="90" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1" />
+          <circle cx="85" cy="110" r="4" fill="#9ca3af" />
+          <rect x="35" y="45" width="30" height="8" rx="2" fill="#3b82f6" />
+          <text x="50" y="51" font-family="'Share Tech Mono'" font-size="6" fill="#ffffff" text-anchor="middle">ROOM 101</text>
+        </g>
+        
+        <!-- Safety Sign Copy -->
+        <g transform="translate(2420, 160)">
+          <rect x="0" y="0" width="40" height="50" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+          <rect x="4" y="4" width="32" height="10" fill="#ef4444" rx="2" />
+          <text x="20" y="11" font-family="'Share Tech Mono'" font-size="5" fill="#ffffff" text-anchor="middle" font-weight="bold">BIOHAZARD</text>
+          <circle cx="20" cy="32" r="10" fill="none" stroke="#ef4444" stroke-width="1.5" />
+          <circle cx="20" cy="32" r="4" fill="none" stroke="#ef4444" stroke-width="1" />
+        </g>
+
+        <!-- Sanitizer Station Copy -->
+        <g transform="translate(2540, 180)">
+          <rect x="0" y="0" width="16" height="36" rx="2" fill="#cbd5e1" />
+          <rect x="3" y="4" width="10" height="18" rx="1" fill="#ffffff" />
+          <rect x="5" y="24" width="6" height="4" fill="#3b82f6" />
+          <path d="M 8 28 L 8 32" stroke="#3b82f6" stroke-width="1.5" />
+        </g>
+
+        <!-- Door 2 Copy -->
+        <g transform="translate(2750, 140)">
+          <rect x="0" y="0" width="100" height="220" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+          <rect x="10" y="10" width="80" height="90" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1" />
+          <circle cx="15" cy="110" r="4" fill="#9ca3af" />
+          <rect x="35" y="45" width="30" height="8" rx="2" fill="#3b82f6" />
+          <text x="50" y="51" font-family="'Share Tech Mono'" font-size="6" fill="#ffffff" text-anchor="middle">ROOM 102</text>
+        </g>
+
+        <!-- Floor Waste Item 0 -->
+        <g id="floor-item-0" transform="translate(480, 500)">
+          <circle class="item-glow" cx="0" cy="0" r="16" fill="rgba(107, 219, 178, 0.15)" stroke="#6BDBB2" stroke-width="1.5" filter="url(#yellow-glow)" />
+          <circle cx="0" cy="0" r="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+          <text x="0" y="4" font-size="11" text-anchor="middle">💉</text>
+        </g>
+
+        <!-- Floor Waste Item 1 -->
+        <g id="floor-item-1" transform="translate(980, 500)">
+          <circle class="item-glow" cx="0" cy="0" r="16" fill="rgba(126, 164, 255, 0.15)" stroke="#7EA4FF" stroke-width="1.5" filter="url(#yellow-glow)" />
+          <circle cx="0" cy="0" r="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+          <text x="0" y="4" font-size="11" text-anchor="middle">💊</text>
+        </g>
+
+        <!-- Floor Waste Item 2 -->
+        <g id="floor-item-2" transform="translate(1480, 500)">
+          <circle class="item-glow" cx="0" cy="0" r="16" fill="rgba(255, 165, 0, 0.15)" stroke="#FFA500" stroke-width="1.5" filter="url(#yellow-glow)" />
+          <circle cx="0" cy="0" r="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+          <text x="0" y="4" font-size="11" text-anchor="middle">🧪</text>
+        </g>
+      </g>
+      
+      <!-- Floor Laser sweep for scan -->
+      <polygon id="locomotion-laser-beam" points="390,325 330,515 450,515" fill="rgba(255, 213, 107, 0.08)" stroke="rgba(255, 213, 107, 0.3)" stroke-width="1.5" filter="url(#laser-glow)" style="opacity: 0; pointer-events: none;" />
+    </g>
+
+    <!-- 1. LEFT PANEL: SCANNER BED & CONVEYOR -->
+    <g id="scanner-group">
+      <!-- High-tech support frame for Conveyor System -->
+      <rect x="15" y="360" width="180" height="25" rx="6" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="2" />
+      
+      <!-- Conveyor Belt pulleys and support structure -->
+      <circle cx="60" cy="372" r="8" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="1.5" />
+      <circle cx="110" cy="372" r="8" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="1.5" />
+      <circle cx="160" cy="372" r="8" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="1.5" />
+      
+      <g id="pulley-spokes-1" transform="translate(60, 372)">
+        <line x1="-8" y1="0" x2="8" y2="0" stroke="#cbd5e1" stroke-width="1.5" />
+        <line x1="0" y1="-8" x2="0" y2="8" stroke="#cbd5e1" stroke-width="1.5" />
+      </g>
+      <g id="pulley-spokes-2" transform="translate(110, 372)">
+        <line x1="-8" y1="0" x2="8" y2="0" stroke="#cbd5e1" stroke-width="1.5" />
+        <line x1="0" y1="-8" x2="0" y2="8" stroke="#cbd5e1" stroke-width="1.5" />
+      </g>
+      <g id="pulley-spokes-3" transform="translate(160, 372)">
+        <line x1="-8" y1="0" x2="8" y2="0" stroke="#cbd5e1" stroke-width="1.5" />
+        <line x1="0" y1="-8" x2="0" y2="8" stroke="#cbd5e1" stroke-width="1.5" />
+      </g>
+      
+      <!-- Conveyor Belt Bed structure -->
+      <rect x="40" y="358" width="140" height="6" fill="#2d3748" rx="2" stroke="#1a1a1a" stroke-width="1" />
+      <line id="conveyor-belt-line" x1="40" y1="361" x2="180" y2="361" stroke="#ffd56b" stroke-width="2.5" stroke-dasharray="6, 6" />
+
+      <!-- High-tech Scanner Bed glow -->
+      <rect x="85" y="357" width="50" height="3" rx="1.5" fill="#ffd56b" filter="url(#yellow-glow)" />
+
+      <!-- HOSPITAL WASTE DUMP TANK (Left side) -->
+      <g id="waste-dump-tank">
+        <!-- Main Tank Body (Dark charcoal medical receptacle) -->
+        <rect x="15" y="210" width="55" height="150" rx="8" fill="#1e293b" stroke="#cbd5e1" stroke-width="2" />
+        
+        <!-- Diagnostic Status Bar -->
+        <rect x="23" y="218" width="39" height="10" rx="3" fill="#0f172a" stroke="#475569" stroke-width="1" />
+        <text x="42" y="225" font-family="'Share Tech Mono', monospace" font-size="6" fill="#6bdbb2" text-anchor="middle" font-weight="bold">FEEDER OK</text>
+        
+        <!-- Glass Waste Viewing Panel -->
+        <rect x="20" y="235" width="45" height="115" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5" />
+        
+        <!-- Piled waste items inside the tank (static backdrop showing sorting material) -->
+        <g id="dumped-waste-visuals">
+          <!-- Biohazard bag (Red) -->
+          <path d="M 28 340 C 23 330, 37 310, 47 310 C 57 310, 52 330, 48 340 Z" fill="#ff7e7e" opacity="0.85" />
+          <text x="38" y="328" font-size="8" text-anchor="middle">☣️</text>
+          
+          <!-- Chemical flask (Orange) -->
+          <path d="M 33 290 L 47 290 L 52 305 L 28 305 Z" fill="#ffa500" opacity="0.8" />
+          <rect x="37" y="283" width="6" height="8" fill="#cbd5e1" />
+          
+          <!-- Radioactive Barrel (Yellow) -->
+          <rect x="42" y="318" width="18" height="22" rx="3" fill="#ffb84d" opacity="0.9" />
+          <line x1="42" y1="324" x2="60" y2="324" stroke="#1a1a1a" stroke-width="1" />
+          <line x1="42" y1="334" x2="60" y2="334" stroke="#1a1a1a" stroke-width="1" />
+          <text x="51" y="331" font-size="6" text-anchor="middle">☢️</text>
+          
+          <!-- Syringe needles (Green/Silver) -->
+          <line x1="24" y1="270" x2="54" y2="255" stroke="#cbd5e1" stroke-width="1.5" />
+          <rect x="22" y="267" width="8" height="4" fill="#6bdbb2" transform="rotate(-26, 22, 267)" />
+          
+          <!-- Pills / Caps (Blue/Plum) -->
+          <rect x="25" y="300" width="8" height="4" rx="2" fill="#7ea4ff" transform="rotate(30, 25, 300)" />
+          <rect x="48" y="295" width="8" height="4" rx="2" fill="#d884ff" transform="rotate(-40, 48, 295)" />
+        </g>
+        
+        <!-- Hazard warning stripes at base of tank -->
+        <g stroke="#ffd56b" stroke-width="2">
+          <line x1="17" y1="354" x2="27" y2="344" />
+          <line x1="27" y1="354" x2="37" y2="344" />
+          <line x1="37" y1="354" x2="47" y2="344" />
+          <line x1="47" y1="354" x2="57" y2="344" />
+          <line x1="57" y1="354" x2="67" y2="344" />
+        </g>
+        
+        <!-- Holographic Search Projector -->
+        <path d="M 32 210 L 52 210 L 47 202 L 37 202 Z" fill="#475569" stroke="#cbd5e1" stroke-width="1" />
+        <circle cx="42" cy="202" r="3" fill="#6bdbb2" filter="url(#yellow-glow)" />
+      </g>
+      
+      <!-- Holographic Search laser beam projection (green/teal) -->
+      <polygon id="dump-laser-beam" points="42,202 15,350 70,350" fill="rgba(107, 219, 178, 0.08)" stroke="rgba(107, 219, 178, 0.3)" stroke-width="1.5" style="opacity: 0; pointer-events: none; transition: opacity 0.2s;" />
+
+      <!-- Gantry Support Frame for Laser Emitter -->
+      <path d="M 80 360 L 80 130 L 110 130" fill="none" stroke="#cbd5e1" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M 80 360 L 80 130 L 110 130" fill="none" stroke="#f4f4f5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      <circle cx="80" cy="360" r="5" fill="#9ca3af" />
+      
+      <!-- Scanning laser emitter -->
+      <path d="M 110 130 L 110 145" stroke="#cbd5e1" stroke-width="6" stroke-linecap="round" />
+      <circle cx="110" cy="145" r="7" fill="#f4f4f5" stroke="#cbd5e1" stroke-width="2" />
+      <circle cx="110" cy="145" r="3" fill="#ffd56b" filter="url(#yellow-glow)" />
+
+      <!-- Laser Scanning Beam (Amber/Yellow Theme) -->
+      <polygon id="laser-beam" points="110,145 85,358 135,358" fill="rgba(255, 213, 107, 0.08)" stroke="rgba(255, 213, 107, 0.3)" stroke-width="1.5" filter="url(#laser-glow)" style="opacity: 0; pointer-events: none; transition: opacity 0.25s;" />
+      
+      <!-- Dynamic Conveyor Specimen -->
+      <g id="conveyor-specimen" transform="translate(45, 345)" style="opacity: 0; pointer-events: none;">
+        <!-- Glowing aura -->
+        <circle id="conv-item-glow" cx="0" cy="0" r="14" fill="rgba(255, 213, 107, 0.15)" stroke="#ffd56b" stroke-width="1.5" filter="url(#yellow-glow)" />
+        <!-- White container circle -->
+        <circle cx="0" cy="0" r="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+        <!-- Specimen Emoji -->
+        <text id="conv-item-emoji" x="0" y="3.5" font-size="10" text-anchor="middle">📦</text>
+      </g>
+    </g>
+
+    <!-- 3. CENTER: HUMANOID MEDICAL ROBOT (Asymmetrically centered around X = 390) -->
+    <g id="humanoid-robot-group">
+      <!-- Stand Pedestal Base -->
+      <g id="pedestal-base">
+        <path d="M 320 600 L 460 600 L 440 540 L 340 540 Z" fill="#e4e4e7" stroke="#cbd5e1" stroke-width="2" />
+        <ellipse cx="390" cy="540" rx="50" ry="12" fill="#f4f4f5" stroke="#cbd5e1" stroke-width="1.5" />
+      </g>
+
+      <!-- Wheeled AMR Base (for Locomotion Mode) -->
+      <g id="wheeled-base" style="display: none;">
+        <!-- Chassis Body -->
+        <rect x="310" y="530" width="160" height="45" rx="10" fill="#e4e4e7" stroke="#cbd5e1" stroke-width="2" />
+        <rect x="320" y="535" width="140" height="10" rx="4" fill="#1a1a1a" />
+        <!-- Hazard warning plates/stripes on base -->
+        <path d="M 330 535 L 340 535 L 335 545 Z" fill="#ffd56b" />
+        <path d="M 350 535 L 360 535 L 355 545 Z" fill="#ffd56b" />
+        <path d="M 420 535 L 430 535 L 425 545 Z" fill="#ffd56b" />
+        <path d="M 440 535 L 450 535 L 445 545 Z" fill="#ffd56b" />
+        
+        <!-- Dual Wheels -->
+        <g id="wheel-left" transform="translate(330, 575)">
+          <circle cx="0" cy="0" r="24" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="1.5" />
+          <circle cx="0" cy="0" r="16" fill="#cbd5e1" />
+          <circle cx="0" cy="0" r="6" fill="#ffd56b" />
+          <line x1="-24" y1="0" x2="24" y2="0" stroke="#1a1a1a" stroke-width="3" />
+          <line x1="0" y1="-24" x2="0" y2="24" stroke="#1a1a1a" stroke-width="3" />
+        </g>
+        <g id="wheel-right" transform="translate(450, 575)">
+          <circle cx="0" cy="0" r="24" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="1.5" />
+          <circle cx="0" cy="0" r="16" fill="#cbd5e1" />
+          <circle cx="0" cy="0" r="6" fill="#ffd56b" />
+          <line x1="-24" y1="0" x2="24" y2="0" stroke="#1a1a1a" stroke-width="3" />
+          <line x1="0" y1="-24" x2="0" y2="24" stroke="#1a1a1a" stroke-width="3" />
+        </g>
+        <!-- Small Caster Wheel in Center -->
+        <circle cx="390" cy="585" r="14" fill="#9ca3af" stroke="#1a1a1a" stroke-width="1" />
+        <circle cx="390" cy="585" r="6" fill="#1a1a1a" />
+      </g>
+      
+      <!-- Back-mounted Hazard Backpack Container (For Locomotion Mode) -->
+      <g id="back-container" style="display: none;">
+        <rect x="315" y="380" width="30" height="12" rx="2" fill="url(#metal-accent)" stroke="#cbd5e1" stroke-width="1" />
+        <rect x="315" y="440" width="30" height="12" rx="2" fill="url(#metal-accent)" stroke="#cbd5e1" stroke-width="1" />
+        <rect x="260" y="350" width="70" height="120" rx="8" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="2" />
+        <rect x="265" y="355" width="60" height="110" rx="4" fill="#ffffff" />
+        <path d="M 295 385 L 305 405 L 285 405 Z" fill="#ffd56b" stroke="#1a1a1a" stroke-width="1" />
+        <text x="295" y="402" font-family="'Share Tech Mono'" font-size="8" fill="#1a1a1a" text-anchor="middle" font-weight="bold">!</text>
+        <text x="295" y="425" font-family="'Share Tech Mono'" font-size="7" fill="#1a1a1a" text-anchor="middle" font-weight="bold">HAZARD</text>
+        <text x="295" y="435" font-family="'Share Tech Mono'" font-size="6" fill="#1a1a1a" text-anchor="middle">ONBOARD</text>
+        <rect x="275" y="445" width="40" height="6" rx="3" fill="#cbd5e1" />
+        <rect id="back-container-fill" x="275" y="445" width="0" height="6" rx="3" fill="#ffd56b" filter="url(#yellow-glow)" />
+      </g>
+      
+      <!-- Telescopic Spine Shaft -->
+      <rect x="375" y="440" width="30" height="100" fill="url(#metal-accent)" stroke="#cbd5e1" stroke-width="2" />
+      <rect x="383" y="450" width="14" height="80" fill="#e4e4e7" opacity="0.6" />
+      <!-- Glowing Theme Yellow ring on support -->
+      <rect x="372" y="475" width="36" height="6" rx="3" fill="#ffd56b" filter="url(#yellow-glow)" />
+
+      <!-- Left Shoulder Joint & Arm (Static, resting posture aligned at X = 330) -->
+      <g id="left-arm">
+        <path d="M 320 310 C 300 320, 280 350, 280 380 L 285 440 L 275 460" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" filter="url(#torso-shadow)" />
+        <path d="M 320 310 C 300 320, 280 350, 280 380 L 285 440 L 275 460" fill="none" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="320" cy="310" r="14" fill="#f4f4f5" stroke="#cbd5e1" stroke-width="2" />
+        <circle cx="275" cy="460" r="6" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="1.5" />
+      </g>
+
+      <!-- Torso / Chest Shell (Centered at X = 390) -->
+      <path d="M 325 305 C 325 270, 455 270, 455 305 L 440 445 C 440 455, 340 455, 340 445 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="3" filter="url(#torso-shadow)" />
+      <path d="M 325 305 L 340 445" stroke="#f4f4f5" stroke-width="1" />
+      <path d="M 455 305 L 440 445" stroke="#f4f4f5" stroke-width="1" />
+      <!-- Cohesive clinical accents (Theme Yellow lines) -->
+      <path d="M 332 320 C 335 350, 345 400, 342 435" fill="none" stroke="#ffd56b" stroke-width="2.5" filter="url(#yellow-glow)" />
+      <path d="M 448 320 C 445 350, 435 400, 438 435" fill="none" stroke="#ffd56b" stroke-width="2.5" filter="url(#yellow-glow)" />
+
+      <!-- Chest Tablet Screen Panel (Cohesive HUD Display with Yellow Border & Dark Screen) -->
+      <rect x="340" y="325" width="100" height="75" rx="8" fill="url(#tablet-glass)" stroke="#ffd56b" stroke-width="2" filter="url(#yellow-glow)" />
+      <rect x="345" y="330" width="90" height="65" rx="5" fill="#1a1a1a" stroke="rgba(255, 213, 107, 0.2)" stroke-width="1" />
+      <text x="390" y="345" font-family="'Share Tech Mono'" font-size="7" fill="rgba(255, 213, 107, 0.5)" text-anchor="middle" letter-spacing="1.5">SYS MONITOR</text>
+      <!-- Glowing active state text (Yellow) -->
+      <text id="tablet-status" x="390" y="365" font-family="'Share Tech Mono'" font-size="12" fill="#ffd56b" text-anchor="middle" font-weight="bold" filter="url(#yellow-glow)">STANDBY</text>
+      <!-- Subtitle showing active item details -->
+      <text id="tablet-detail" x="390" y="382" font-family="'Share Tech Mono'" font-size="7" fill="#64748b" text-anchor="middle">ROBOTIC CORE ONLINE</text>
+      <circle cx="355" cy="343" r="2" fill="#ffd56b" filter="url(#yellow-glow)" />
+
+      <!-- Neck Mech -->
+      <rect x="378" y="225" width="24" height="30" fill="url(#metal-accent)" stroke="#cbd5e1" stroke-width="2" />
+      <line x1="382" y1="235" x2="398" y2="235" stroke="#ffd56b" stroke-width="2" filter="url(#yellow-glow)" />
+      <line x1="382" y1="245" x2="398" y2="245" stroke="#ffd56b" stroke-width="2" filter="url(#yellow-glow)" />
+
+      <!-- Friendly Humanoid Head (Centered at X = 390) -->
+      <circle cx="390" cy="180" r="50" fill="#ffffff" stroke="#cbd5e1" stroke-width="3" filter="url(#torso-shadow)" />
+      <!-- Black visor wrap-around -->
+      <path d="M 345 180 C 345 155, 435 155, 435 180 C 435 205, 345 205, 345 180 Z" fill="#1a1a1a" stroke="#cbd5e1" stroke-width="2" />
+      <!-- LED Glowing Accent on Visor Rim -->
+      <path d="M 348 172 Q 390 152 432 172" fill="none" stroke="rgba(255, 213, 107, 0.4)" stroke-width="1.5" />
+      
+      <!-- Interactive LED Eyes (Yellow) -->
+      <!-- Left Eye Group -->
+      <g id="led-eye-left" transform="translate(373, 180)">
+        <circle cx="0" cy="0" r="6" fill="#ffd56b" class="eye-pulse" filter="url(#yellow-glow)" />
+      </g>
+      <!-- Right Eye Group -->
+      <g id="led-eye-right" transform="translate(407, 180)">
+        <circle cx="0" cy="0" r="6" fill="#ffd56b" class="eye-pulse" filter="url(#yellow-glow)" />
+      </g>
+
+      <!-- Side Ear Accents -->
+      <circle cx="337" cy="180" r="7" fill="#1a1a1a" stroke="#ffd56b" stroke-width="1.5" filter="url(#yellow-glow)" />
+      <circle cx="443" cy="180" r="7" fill="#1a1a1a" stroke="#ffd56b" stroke-width="1.5" filter="url(#yellow-glow)" />
+
+    <!-- 4. RIGHT ARM: DETAILED INTERACTIVE SHIELDED ARM ASSEMBLY -->
+    <!-- The shoulder joint pivots around (450, 310) which aligns naturally to the robot's right shoulder socket -->
+    <!-- Arm aesthetics use professional Yellow/Black/White theme -->
+    <g id="active-arm" transform="translate(450, 310)">
+      <!-- Shoulder Joint Hub -->
+      <circle cx="0" cy="0" r="20" fill="#1a1a1a" stroke="#ffd56b" stroke-width="3" filter="url(#yellow-glow)" />
+      <circle cx="0" cy="0" r="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" />
+      
+      <!-- Upper Arm Group - rotates around the shoulder joint -->
+      <g id="upper-arm-group">
+        <!-- Mechanical interior arm frame structure (Black) -->
+        <line x1="0" y1="0" x2="200" y2="0" stroke="#1a1a1a" stroke-width="26" stroke-linecap="round" />
+        <!-- White outer aerodynamic panel shield -->
+        <line x1="15" y1="0" x2="185" y2="0" stroke="#ffffff" stroke-width="16" stroke-linecap="round" />
+        <!-- Soft yellow center line path -->
+        <line x1="30" y1="0" x2="170" y2="0" stroke="#ffd56b" stroke-width="2.5" stroke-linecap="round" filter="url(#yellow-glow)" class="glowing-path" />
+
+        <!-- Elbow Joint Hub (Yellow & Black) -->
+        <circle cx="200" cy="0" r="16" fill="#1a1a1a" stroke="#ffd56b" stroke-width="2.5" filter="url(#yellow-glow)" />
+        <circle cx="200" cy="0" r="6" fill="#ffffff" />
+
+        <!-- Forearm Group - translated to (200, 0) and rotates around the elbow joint -->
+        <g id="forearm-group" transform="translate(200, 0)">
+          <!-- Mech core (Black) -->
+          <line x1="0" y1="0" x2="180" y2="0" stroke="#1a1a1a" stroke-width="20" stroke-linecap="round" />
+          <!-- White outer panel shield -->
+          <line x1="12" y1="0" x2="168" y2="0" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+          <!-- Accent line (Yellow) -->
+          <line x1="25" y1="0" x2="155" y2="0" stroke="#ffd56b" stroke-width="2" stroke-linecap="round" filter="url(#yellow-glow)" />
+
+          <!-- Wrist Mech Assembly -->
+          <rect x="172" y="-9" width="12" height="18" rx="3" fill="#cbd5e1" stroke="#9ca3af" stroke-width="1" />
+          <circle cx="180" cy="0" r="11" fill="#1a1a1a" stroke="#ffd56b" stroke-width="2" filter="url(#yellow-glow)" />
+
+          <!-- Gripper Assembly group (Held item placed BEFORE fingers in drawing order to prevent overlapping) -->
+          <g id="gripper-group" transform="translate(180, 0)">
+            <!-- Held Item Simulation Box (Drawn behind claws) -->
+            <g id="held-item-group" style="transform: scale(0.3); opacity: 0;">
+              <rect id="held-item-block" x="18" y="-15" width="30" height="30" rx="6" fill="#6bdbb2" stroke="#1a1a1a" stroke-width="2.5" />
+              <text id="held-item-emoji" x="33" y="6" font-size="16" text-anchor="middle">💉</text>
+            </g>
+
+            <!-- Top Finger Claw (Drawn on top of item, Black/Slate) -->
+            <path id="finger-top" d="M 0 -18 L 36 -18 L 36 -10" fill="none" stroke="#1a1a1a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+            <path id="finger-top-pad" d="M 33 -10 L 39 -10" stroke="#ffd56b" stroke-width="2" filter="url(#yellow-glow)" />
+            
+            <!-- Bottom Finger Claw (Drawn on top of item, Black/Slate) -->
+            <path id="finger-bottom" d="M 0 18 L 36 18 L 36 10" fill="none" stroke="#1a1a1a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+            <path id="finger-bottom-pad" d="M 33 10 L 39 10" stroke="#ffd56b" stroke-width="2" filter="url(#yellow-glow)" />
+          </g>
+        </g>
+      </g>
+    </g>
+    </g> <!-- nested active-arm ends here inside humanoid-robot-group -->
+  </svg>
+
+  <script>
+    // State Emojis mapped by Category
+    const EMOJIS = {
+      'Sharps/Needles': '💉',
+      'Infectious': '🩸',
+      'Pharmaceutical': '💊',
+      'Pathological': '🦴',
+      'Radioactive': '☢️',
+      'Chemical/Hazardous': '🧪',
+      'General/Non-hazardous': '📄',
+      'Mixed/Hybrid': '🩹'
+    };
+
+    const SAMPLES = [
+      { name: 'Used Syringe', cat: 'Sharps/Needles', icon: '💉' },
+      { name: 'Blood Gauze', cat: 'Infectious', icon: '🩸' },
+      { name: 'Expired Aspirin', cat: 'Pharmaceutical', icon: '💊' },
+      { name: 'Hydrochloric Acid', cat: 'Chemical/Hazardous', icon: '🧪' },
+      { name: 'Skeletal Remains', cat: 'Pathological', icon: '🦴' },
+      { name: 'Cobalt-60', cat: 'Radioactive', icon: '☢️' },
+      { name: 'Paper Towel', cat: 'General/Non-hazardous', icon: '📄' },
+      { name: 'Contaminated Mixed Sharps', cat: 'Mixed/Hybrid', icon: '🩹' }
+    ];
+
+    const CATEGORY_COLORS = {
+      'Infectious': '#FF7E7E',
+      'Sharps/Needles': '#6BDBB2',
+      'Pharmaceutical': '#7EA4FF',
+      'Pathological': '#D884FF',
+      'Radioactive': '#FFB84D',
+      'Chemical/Hazardous': '#FFA500',
+      'General/Non-hazardous': '#66C2FF',
+      'Mixed/Hybrid': '#D97706'
+    };
+
+    // Locomotion global variables
+    let currentMode = 'conveyor'; // 'conveyor' | 'locomotion'
+    let scrollX = 0;
+    let wheelRotation = 0;
+    let fingerGap = 18;
+    let locomotionState = 'moving'; // 'moving' | 'detecting' | 'picking' | 'grabbing' | 'depositing' | 'dropping' | 'returning'
+    let activeItem = null;
+    let targetAngles = { shoulder: -75, elbow: 100, wrist: 0, gap: 18 };
+    let startAngles = { shoulder: -75, elbow: 100, wrist: 0, gap: 18 };
+    let sequenceTimer = 0;
+    let sequenceDuration = 0;
+
+    const floorItems = [
+      { id: 0, initialX: 480, name: 'Used Syringe', category: 'Sharps/Needles', color: '#6BDBB2', emoji: '💉', collected: false },
+      { id: 1, initialX: 980, name: 'Expired Aspirin', category: 'Pharmaceutical', color: '#7EA4FF', emoji: '💊', collected: false },
+      { id: 2, initialX: 1480, name: 'Hydrochloric Acid', category: 'Chemical/Hazardous', color: '#FFA500', emoji: '🧪', collected: false }
+    ];
+
+    function lerp(start, end, amt) {
+      return (1 - amt) * start + amt * end;
+    }
+
+    function updateBackContainerFill() {
+      const fillEl = document.getElementById('back-container-fill');
+      if (fillEl) {
+        const collectedCount = floorItems.filter(item => item.collected).length;
+        const fillWidth = collectedCount * 13;
+        fillEl.setAttribute('width', fillWidth);
+      }
+    }
+
+    function startSequence(stateName, duration, target) {
+      locomotionState = stateName;
+      sequenceTimer = 0;
+      sequenceDuration = duration;
+      
+      startAngles.shoulder = parseFloat(upperArmGroup.getAttribute('transform')?.replace('rotate(', '')?.replace(')', '') || -75);
+      const elbowTransform = forearmGroup.getAttribute('transform') || '';
+      const elbowMatch = elbowTransform.match(/rotate\(([^)]+)\)/);
+      startAngles.elbow = elbowMatch ? parseFloat(elbowMatch[1]) : 100;
+      
+      const wristTransform = gripperGroup.getAttribute('transform') || '';
+      const wristMatch = wristTransform.match(/rotate\(([^)]+)\)/);
+      startAngles.wrist = wristMatch ? parseFloat(wristMatch[1]) : 0;
+      
+      startAngles.gap = fingerGap;
+      targetAngles = target;
+    }
+
+    function setSimulationMode(mode) {
+      currentMode = mode;
+      const scanner = document.getElementById('scanner-group');
+      const pedestal = document.getElementById('pedestal-base');
+      const locoScene = document.getElementById('locomotion-scene');
+      const wheeledBase = document.getElementById('wheeled-base');
+      const backContainer = document.getElementById('back-container');
+      
+      if (mode === 'locomotion') {
+        if (scanner) scanner.style.display = 'none';
+        if (pedestal) pedestal.style.display = 'none';
+        if (locoScene) locoScene.style.display = 'block';
+        if (wheeledBase) wheeledBase.style.display = 'block';
+        if (backContainer) backContainer.style.display = 'block';
+        
+        locomotionState = 'moving';
+        scrollX = 0;
+        
+        // Reset floor items to original positions
+        floorItems[0].initialX = 480;
+        floorItems[0].name = 'Used Syringe';
+        floorItems[0].category = 'Sharps/Needles';
+        floorItems[0].color = '#6BDBB2';
+        floorItems[0].emoji = '💉';
+        floorItems[0].collected = false;
+
+        floorItems[1].initialX = 980;
+        floorItems[1].name = 'Expired Aspirin';
+        floorItems[1].category = 'Pharmaceutical';
+        floorItems[1].color = '#7EA4FF';
+        floorItems[1].emoji = '💊';
+        floorItems[1].collected = false;
+
+        floorItems[2].initialX = 1480;
+        floorItems[2].name = 'Hydrochloric Acid';
+        floorItems[2].category = 'Chemical/Hazardous';
+        floorItems[2].color = '#FFA500';
+        floorItems[2].emoji = '🧪';
+        floorItems[2].collected = false;
+
+        floorItems.forEach(item => {
+          const el = document.getElementById('floor-item-' + item.id);
+          if (el) {
+            el.style.display = 'block';
+            el.setAttribute('transform', `translate(${item.initialX}, 500)`);
+            const textEl = el.querySelector('text');
+            if (textEl) textEl.textContent = item.emoji;
+            const glowEl = el.querySelector('.item-glow');
+            if (glowEl) {
+              glowEl.setAttribute('stroke', item.color);
+              glowEl.setAttribute('fill', item.color + '26');
+            }
+          }
+        });
+        updateBackContainerFill();
+      } else {
+        if (scanner) scanner.style.display = 'block';
+        if (pedestal) pedestal.style.display = 'block';
+        if (locoScene) locoScene.style.display = 'none';
+        if (wheeledBase) wheeledBase.style.display = 'none';
+        if (backContainer) backContainer.style.display = 'none';
+        robotGroup.removeAttribute('transform');
+      }
+    }
+
+    // Keep track of elements
+    const upperArmGroup = document.getElementById('upper-arm-group');
+    const forearmGroup = document.getElementById('forearm-group');
+    const fingerTop = document.getElementById('finger-top');
+    const fingerBottom = document.getElementById('finger-bottom');
+    const heldItemGroup = document.getElementById('held-item-group');
+    const heldItemBlock = document.getElementById('held-item-block');
+    const heldItemEmoji = document.getElementById('held-item-emoji');
+    const laserBeam = document.getElementById('laser-beam');
+    const tabletStatus = document.getElementById('tablet-status');
+    const tabletDetail = document.getElementById('tablet-detail');
+    const eyeLeft = document.getElementById('led-eye-left');
+    const eyeRight = document.getElementById('led-eye-right');
+    const robotGroup = document.getElementById('humanoid-robot-group');
+    const gripperGroup = document.getElementById('gripper-group');
+
+    // Dynamically wrap, scale, and center the status text in the chest tablet screen to prevent text overflow and alignment issues
+    function updateTabletStatus(text, phase) {
+      if (!tabletStatus) return;
+      tabletStatus.textContent = text;
+      
+      const maxWidth = 86;
+      let fontSize = 12;
+      tabletStatus.style.fontSize = fontSize + 'px';
+      
+      let textWidth = text.length * fontSize * 0.6;
+      if (textWidth > maxWidth) {
+        fontSize = maxWidth / (text.length * 0.6);
+        if (fontSize < 7.5) fontSize = 7.5;
+        tabletStatus.style.fontSize = fontSize + 'px';
+      }
+      
+      const y = 358 + fontSize * 0.55;
+      tabletStatus.setAttribute('y', y);
+
+      // Map color theme dynamically based on state
+      if (text === 'PENDING VERIFICATION' || text.includes('PICKING')) {
+        tabletStatus.setAttribute('fill', '#ffb84d');
+      } else if (phase === 'detecting' || text.includes('IDENTIFYING') || text.includes('LOCOMOTING')) {
+        tabletStatus.setAttribute('fill', '#ffd56b');
+      } else if (text.includes('SORTING') || text.includes('DROPPING')) {
+        tabletStatus.setAttribute('fill', '#6bdbb2');
+      } else {
+        tabletStatus.setAttribute('fill', '#ffd56b');
+      }
+    }
+
+    // Update LED eyes SVG shapes based on the robot phase (Yellow Theme)
+    function updateRobotEyes(phase, phaseLabel) {
+      let eyeSvg = '';
+      if (phaseLabel === 'PENDING VERIFICATION') {
+        eyeSvg = '<rect x="-2" y="-8" width="4" height="11" rx="2" fill="#ffd56b" filter="url(#yellow-glow)" /><circle cx="0" cy="6" r="2" fill="#ffd56b" filter="url(#yellow-glow)" />';
+        eyeLeft.innerHTML = eyeSvg;
+        eyeRight.innerHTML = eyeSvg;
+      } else if (phase === 'detecting') {
+        eyeSvg = '<rect x="-8" y="-1.5" width="16" height="3" rx="1.5" fill="#ffd56b" filter="url(#yellow-glow)" />';
+        eyeLeft.innerHTML = eyeSvg;
+        eyeRight.innerHTML = eyeSvg;
+      } else if (phase === 'dropping' || phase === 'done') {
+        eyeSvg = '<path d="M -8,3 C -8,-3 8,-3 8,3" fill="none" stroke="#ffd56b" stroke-width="3" stroke-linecap="round" filter="url(#yellow-glow)" />';
+        eyeLeft.innerHTML = eyeSvg;
+        eyeRight.innerHTML = eyeSvg;
+      } else {
+        eyeSvg = '<circle cx="0" cy="0" r="6" fill="#ffd56b" class="eye-pulse" filter="url(#yellow-glow)" />';
+        eyeLeft.innerHTML = eyeSvg;
+        eyeRight.innerHTML = eyeSvg;
+      }
+    }
+
+    // Wrap and scale SVG text on the chest tablet to prevent text overflow and misalignment
+    function updateTabletDetail(text) {
+      const element = document.getElementById('tablet-detail');
+      if (!element) return;
+      
+      element.innerHTML = ''; // clear existing tspans or text
+      const cleanText = (text || '').trim();
+      if (!cleanText) return;
+      
+      const maxWidth = 84; // max width allowed inside the tablet screen margins
+      const cx = 390;
+      const startY = 380;
+      const lineHeight = 7.5;
+      
+      // Share Tech Mono character width is roughly 0.6 * font-size
+      let fontSize = 7;
+      element.style.fontSize = fontSize + 'px';
+      
+      let words = cleanText.split(' ');
+      let lines = [];
+      let currentLine = [];
+      
+      for (let n = 0; n < words.length; n++) {
+        let testLine = currentLine.concat([words[n]]);
+        let charWidth = fontSize * 0.6;
+        let testWidth = testLine.join(' ').length * charWidth;
+        if (testWidth > maxWidth && n > 0) {
+          lines.push(currentLine.join(' '));
+          currentLine = [words[n]];
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine.length > 0) {
+        lines.push(currentLine.join(' '));
+      }
+      
+      // If we have too many lines (e.g. more than 3), let's shrink the font size to 5.5px and recalculate
+      if (lines.length > 3) {
+        fontSize = 5.5;
+        element.style.fontSize = fontSize + 'px';
+        lines = [];
+        currentLine = [];
+        for (let n = 0; n < words.length; n++) {
+          let testLine = currentLine.concat([words[n]]);
+          let charWidth = fontSize * 0.6;
+          let testWidth = testLine.join(' ').length * charWidth;
+          if (testWidth > maxWidth && n > 0) {
+            lines.push(currentLine.join(' '));
+            currentLine = [words[n]];
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine.length > 0) {
+          lines.push(currentLine.join(' '));
+        }
+      }
+      
+      // If still too long, truncate to 3 lines with ellipsis
+      if (lines.length > 3) {
+        lines = lines.slice(0, 3);
+        lines[2] = lines[2].slice(0, -3) + '...';
+      }
+      
+      // Calculate start Y to vertically center the lines inside the bottom text area (Y=370 to Y=392)
+      const totalHeight = (lines.length - 1) * lineHeight;
+      let y = 381 - (totalHeight / 2) + 2.5; // adjust for text baseline
+      
+      lines.forEach(lineText => {
+        const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+        tspan.setAttribute('x', cx);
+        tspan.setAttribute('y', y);
+        tspan.textContent = lineText;
+        element.appendChild(tspan);
+        y += lineHeight;
+      });
+    }
+
+    // Process and render status changes in the dashboard
+    function updateRobotState(state) {
+      if (typeof state.baseRotation === 'number') {
+        robotGroup.setAttribute('transform', `rotate(${state.baseRotation}, 390, 540)`);
+      }
+
+      if (state.armAngles) {
+        upperArmGroup.setAttribute('transform', `rotate(${state.armAngles.shoulder})`);
+        forearmGroup.setAttribute('transform', `translate(200, 0) rotate(${state.armAngles.elbow})`);
+      }
+
+      if (typeof state.wristAngle === 'number') {
+        gripperGroup.setAttribute('transform', `translate(180, 0) rotate(${state.wristAngle})`);
+      }
+
+      if (typeof state.fingerGap === 'number') {
+        const gap = state.fingerGap;
+        fingerTop.setAttribute('d', `M 0 ${-gap-8} L 36 ${-gap-8} L 36 ${-gap}`);
+        fingerBottom.setAttribute('d', `M 0 ${gap+8} L 36 ${gap+8} L 36 ${gap}`);
+      }
+
+      if (state.heldItem) {
+        heldItemBlock.setAttribute('fill', state.heldItem.color);
+        heldItemEmoji.textContent = state.heldItem.emoji || EMOJIS[state.heldItem.id] || '📦';
+        
+        heldItemGroup.style.opacity = state.itemOpacity;
+        heldItemGroup.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s';
+        
+        if (state.itemDrop) {
+          heldItemGroup.style.transform = `scale(${state.itemScale}) translateY(120px)`;
+        } else {
+          heldItemGroup.style.transform = `scale(${state.itemScale})`;
+        }
+      } else {
+        heldItemGroup.style.opacity = '0';
+      }
+
+      if (state.phase === 'detecting' && (state.elapsed || 0) >= 1000) {
+        laserBeam.style.opacity = '1';
+        laserBeam.classList.add('laser-active');
+      } else {
+        laserBeam.style.opacity = '0';
+        laserBeam.classList.remove('laser-active');
+      }
+
+      if (state.phaseLabel) {
+        updateTabletStatus(state.phaseLabel, state.phase);
+      }
+      
+      if (state.resultData && state.resultData.name) {
+        updateTabletDetail(state.resultData.name.toUpperCase());
+      } else {
+        updateTabletDetail('ROBOTIC CORE ONLINE');
+      }
+
+      updateRobotEyes(state.phase, state.phaseLabel);
+    }
+
+    // Locomotion update function
+    function updateLocomotion(dt) {
+      if (locomotionState === 'moving') {
+        scrollX += 0.08 * dt;
+        wheelRotation += 0.19 * dt;
+        
+        // Loop the scrolling corridor background seamlessly
+        // Width of the repeating pattern is 2000px
+        if (scrollX >= 2000) {
+          scrollX -= 2000;
+          floorItems.forEach(item => {
+            item.initialX -= 2000;
+            const el = document.getElementById('floor-item-' + item.id);
+            if (el) {
+              el.setAttribute('transform', `translate(${item.initialX}, 500)`);
+            }
+          });
+        }
+        
+        document.getElementById('wheel-left').setAttribute('transform', `translate(330, 575) rotate(${wheelRotation})`);
+        document.getElementById('wheel-right').setAttribute('transform', `translate(450, 575) rotate(${wheelRotation})`);
+        
+        // Apply parallax scrolling translation:
+        // Foreground moves at full speed
+        document.getElementById('scrolling-corridor').setAttribute('transform', `translate(${-scrollX}, 0)`);
+        // Background moves at 40% speed
+        const bgScrollX = scrollX * 0.4;
+        document.getElementById('corridor-bg-parallax').setAttribute('transform', `translate(${-bgScrollX}, 0)`);
+        
+        // Humanoid chassis suspension bobbing micro-animation
+        const bobY = Math.sin(scrollX * 0.05) * 1.5;
+        robotGroup.setAttribute('transform', `translate(0, ${bobY})`);
+        
+        upperArmGroup.setAttribute('transform', 'rotate(-75)');
+        forearmGroup.setAttribute('transform', 'translate(200, 0) rotate(100)');
+        gripperGroup.setAttribute('transform', 'translate(180, 0) rotate(0)');
+        fingerTop.setAttribute('d', 'M 0 -26 L 36 -26 L 36 -18');
+        fingerBottom.setAttribute('d', 'M 0 26 L 36 26 L 36 18');
+        heldItemGroup.style.opacity = '0';
+        
+        updateTabletStatus('LOCOMOTING', 'locomoting');
+        updateTabletDetail('HEURISTICS RUNNING');
+        updateRobotEyes('idle', 'LOCOMOTING');
+        
+        // Respawn items that have scrolled off-screen to the left
+        floorItems.forEach(item => {
+          const relX = item.initialX - scrollX;
+          if (relX < -100) {
+            const spawnRelX = 850 + Math.random() * 350;
+            item.initialX = scrollX + spawnRelX;
+            item.collected = false;
+            
+            // Randomize specimen details
+            const sample = SAMPLES[Math.floor(Math.random() * SAMPLES.length)];
+            item.name = sample.name;
+            item.category = sample.cat;
+            item.emoji = sample.icon;
+            item.color = CATEGORY_COLORS[sample.cat] || '#FFFFFF';
+            
+            const el = document.getElementById('floor-item-' + item.id);
+            if (el) {
+              el.style.display = 'block';
+              el.setAttribute('transform', `translate(${item.initialX}, 500)`);
+              
+              const textEl = el.querySelector('text');
+              if (textEl) textEl.textContent = item.emoji;
+              
+              const glowEl = el.querySelector('.item-glow');
+              if (glowEl) {
+                glowEl.setAttribute('stroke', item.color);
+                glowEl.setAttribute('fill', item.color + '26');
+              }
+            }
+          }
+        });
+        
+        // Check for pickups
+        for (let item of floorItems) {
+          if (!item.collected) {
+            const relX = item.initialX - scrollX;
+            if (relX >= 405 && relX <= 415) {
+              activeItem = item;
+              startSequence('detecting', 1200, { shoulder: -75, elbow: 100, wrist: 0, gap: 18 });
+              break;
+            }
+          }
+        }
+      } else {
+        sequenceTimer += dt;
+        let progress = Math.min(1, sequenceTimer / sequenceDuration);
+        
+        const currentShoulder = lerp(startAngles.shoulder, targetAngles.shoulder, progress);
+        const currentElbow = lerp(startAngles.elbow, targetAngles.elbow, progress);
+        const currentWrist = lerp(startAngles.wrist, targetAngles.wrist, progress);
+        fingerGap = lerp(startAngles.gap, targetAngles.gap, progress);
+        
+        upperArmGroup.setAttribute('transform', `rotate(${currentShoulder})`);
+        forearmGroup.setAttribute('transform', `translate(200, 0) rotate(${currentElbow})`);
+        gripperGroup.setAttribute('transform', `translate(180, 0) rotate(${currentWrist})`);
+        
+        fingerTop.setAttribute('d', `M 0 ${-fingerGap-8} L 36 ${-fingerGap-8} L 36 ${-fingerGap}`);
+        fingerBottom.setAttribute('d', `M 0 ${fingerGap+8} L 36 ${fingerGap+8} L 36 ${fingerGap}`);
+        
+        if (locomotionState === 'detecting') {
+          const laser = document.getElementById('locomotion-laser-beam');
+          if (laser) {
+            laser.style.opacity = '1';
+            laser.classList.add('laser-active');
+          }
+          
+          updateTabletStatus('IDENTIFYING', 'detecting');
+          updateTabletDetail(activeItem.name.toUpperCase());
+          updateRobotEyes('detecting', 'IDENTIFYING');
+          
+          if (progress >= 1) {
+            if (laser) {
+              laser.style.opacity = '0';
+              laser.classList.remove('laser-active');
+            }
+            startSequence('picking', 1000, { shoulder: -204, elbow: -119, wrist: -30, gap: 18 });
+          }
+        } 
+        else if (locomotionState === 'picking') {
+          updateTabletStatus('PICKING', 'picking');
+          updateRobotEyes('picking', 'PICKING');
+          
+          if (progress >= 1) {
+            startSequence('grabbing', 400, { shoulder: -204, elbow: -119, wrist: -30, gap: 4 });
+          }
+        } 
+        else if (locomotionState === 'grabbing') {
+          if (progress >= 1) {
+            heldItemBlock.setAttribute('fill', activeItem.color);
+            heldItemEmoji.textContent = activeItem.emoji;
+            heldItemGroup.style.opacity = '1';
+            heldItemGroup.style.transform = 'scale(0.3)';
+            
+            const el = document.getElementById('floor-item-' + activeItem.id);
+            if (el) el.style.display = 'none';
+            
+            startSequence('depositing', 1500, { shoulder: -230, elbow: -40, wrist: 30, gap: 4 });
+          }
+        } 
+        else if (locomotionState === 'depositing') {
+          updateTabletStatus('SORTING', 'dropping');
+          updateRobotEyes('dropping', 'SORTING');
+          
+          if (progress >= 1) {
+            startSequence('dropping', 500, { shoulder: -230, elbow: -40, wrist: 30, gap: 18 });
+            
+            heldItemGroup.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s';
+            heldItemGroup.style.transform = 'scale(0.3) translateY(80px)';
+            heldItemGroup.style.opacity = '0';
+            
+            window.parent.postMessage({
+              type: 'LOCOMOTION_SORT_COMPLETE',
+              item: { name: activeItem.name, category: activeItem.category }
+            }, '*');
+            
+            activeItem.collected = true;
+            updateBackContainerFill();
+          }
+        } 
+        else if (locomotionState === 'dropping') {
+          if (progress >= 1) {
+            startSequence('returning', 1000, { shoulder: -75, elbow: 100, wrist: 0, gap: 18 });
+          }
+        } 
+        else if (locomotionState === 'returning') {
+          if (progress >= 1) {
+            locomotionState = 'moving';
+          }
+        }
+      }
+    }
+
+    // Save latest state to drive local conveyor animations
+    let latestState = null;
+    let conveyorScrollX = 0;
+    let pulleyRotation = 0;
+
+    function updateConveyorAnimation(dt) {
+      if (!latestState) return;
+
+      const phase = latestState.phase;
+      const elapsed = latestState.elapsed || 0;
+      const phaseLabel = latestState.phaseLabel || '';
+
+      const dumpLaser = document.getElementById('dump-laser-beam');
+      const convSpec = document.getElementById('conveyor-specimen');
+      const conveyorBelt = document.getElementById('conveyor-belt-line');
+      const convEmoji = document.getElementById('conv-item-emoji');
+      const convGlow = document.getElementById('conv-item-glow');
+
+      // Resolve the active item's emoji and color from parent state
+      let activeItemData = null;
+      if (latestState.heldItem) {
+        activeItemData = {
+          emoji: latestState.heldItem.emoji || EMOJIS[latestState.heldItem.id] || '📦',
+          color: latestState.heldItem.color || '#cbd5e1'
+        };
+      } else if (latestState.pendingResult) {
+        activeItemData = {
+          emoji: SAMPLES.find(s => s.name === latestState.pendingResult.name)?.icon || EMOJIS[latestState.pendingResult.category.id] || '📦',
+          color: latestState.pendingResult.category.color || '#cbd5e1'
+        };
+      } else if (latestState.selectedPresetName) {
+        const sample = SAMPLES.find(s => s.name === latestState.selectedPresetName);
+        if (sample) {
+          activeItemData = {
+            emoji: sample.icon,
+            color: CATEGORY_COLORS[sample.cat] || '#cbd5e1'
+          };
+        }
+      }
+
+      if (convSpec && activeItemData) {
+        if (convEmoji) convEmoji.textContent = activeItemData.emoji;
+        if (convGlow) {
+          convGlow.setAttribute('stroke', activeItemData.color);
+          convGlow.setAttribute('fill', activeItemData.color + '26');
+        }
+      }
+
+      let isBeltMoving = false;
+      let showDumpLaser = false;
+      let itemX = 45;
+      let itemOpacity = 0;
+
+      if (phase === 'detecting') {
+        if (elapsed < 1000) {
+          // Phase 1: Item rolls from waste dump (X=45) to scanner bed (X=110)
+          isBeltMoving = true;
+          showDumpLaser = true;
+          itemOpacity = 1;
+          const t = Math.min(1, elapsed / 1000);
+          itemX = lerp(45, 110, t);
+        } else {
+          // Phase 2: Item sits on conveyor deck scanner bed (X=110) being scanned
+          isBeltMoving = false;
+          showDumpLaser = false;
+          itemOpacity = 1;
+          itemX = 110;
+        }
+      } else if (phase === 'picking' || phaseLabel === 'PENDING VERIFICATION' || phaseLabel === 'SUPERVISOR HOLD') {
+        // Item remains on conveyor deck scanner bed until picked up
+        isBeltMoving = false;
+        showDumpLaser = false;
+        itemOpacity = 1;
+        itemX = 110;
+      } else if (phase === 'transporting' || phase === 'dropping') {
+        // Item is in robot arm; hide conveyor specimen
+        isBeltMoving = false;
+        showDumpLaser = false;
+        itemOpacity = 0;
+        itemX = 110;
+      } else {
+        // Idle / Done / Returning
+        isBeltMoving = false;
+        showDumpLaser = false;
+        itemOpacity = 0;
+        itemX = 45;
+      }
+
+      // Smoothly animate belt and pulleys when running
+      if (isBeltMoving) {
+        conveyorScrollX = (conveyorScrollX - 0.1 * dt) % 12;
+        pulleyRotation = (pulleyRotation + 0.3 * dt) % 360;
+      }
+
+      const spoke1 = document.getElementById('pulley-spokes-1');
+      const spoke2 = document.getElementById('pulley-spokes-2');
+      const spoke3 = document.getElementById('pulley-spokes-3');
+      if (spoke1) spoke1.setAttribute('transform', `translate(60, 372) rotate(${pulleyRotation})`);
+      if (spoke2) spoke2.setAttribute('transform', `translate(110, 372) rotate(${pulleyRotation})`);
+      if (spoke3) spoke3.setAttribute('transform', `translate(160, 372) rotate(${pulleyRotation})`);
+
+      if (conveyorBelt) {
+        conveyorBelt.setAttribute('stroke-dashoffset', conveyorScrollX);
+      }
+
+      if (convSpec) {
+        convSpec.setAttribute('transform', `translate(${itemX}, 345)`);
+        convSpec.style.opacity = itemOpacity;
+        convSpec.style.display = itemOpacity > 0 ? 'block' : 'none';
+      }
+
+      if (dumpLaser) {
+        if (showDumpLaser) {
+          dumpLaser.style.opacity = '1';
+          const sweep = Math.sin(Date.now() * 0.015) * 12;
+          dumpLaser.setAttribute('points', `42,202 ${15 + sweep},350 ${70 + sweep},350`);
+        } else {
+          dumpLaser.style.opacity = '0';
+        }
+      }
+    }
+
+    // Message listener from React Parent App
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'UPDATE_ROBOT_STATE') {
+        const state = event.data.state;
+        latestState = state;
+        if (state.simulationMode && state.simulationMode !== currentMode) {
+          setSimulationMode(state.simulationMode);
+        }
+        if (currentMode === 'conveyor') {
+          updateRobotState(state);
+        }
+      }
+    });
+
+    // Start animation loop
+    let lastTime = 0;
+    function animationLoop(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      const dt = Math.min(50, timestamp - lastTime);
+      lastTime = timestamp;
+      
+      if (currentMode === 'locomotion') {
+        updateLocomotion(dt);
+      } else if (currentMode === 'conveyor') {
+        updateConveyorAnimation(dt);
+      }
+      
+      requestAnimationFrame(animationLoop);
+    }
+    requestAnimationFrame(animationLoop);
+
+    // Notify React Parent upon loading to request current system state
+    window.parent.postMessage({ type: 'REQUEST_INITIAL_STATE' }, '*');
+  </script>
+</body>
+</html>

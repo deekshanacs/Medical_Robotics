@@ -1,0 +1,15 @@
+{
+  "short_name": "MediSort",
+  "name": "MediSort Robotic Waste Classification Dashboard",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#FDF5ED",
+  "theme_color": "#1A1A1A",
+  "display": "standalone"
+}
