@@ -302,6 +302,168 @@ input[type=range] { width: 100%; cursor: pointer; accent-color: ${COLORS.Dark}; 
   100% { top: 0%; }
 }
 
+@media (max-width: 1024px) {
+  body, html {
+    overflow: auto;
+  }
+
+  .app-layout {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    border-radius: 24px;
+    padding: 20px 16px;
+  }
+
+  .sidebar nav {
+    flex-direction: row !important;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    gap: 8px !important;
+    scrollbar-width: none;
+  }
+
+  .sidebar nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .side-item {
+    flex: 0 0 auto;
+    height: 44px;
+    padding: 0 18px;
+    font-size: 12px;
+  }
+
+  .main-viewport {
+    min-height: 0;
+    border-radius: 24px;
+  }
+
+  .view-header {
+    height: auto;
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .view-header > div {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .view-content {
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  .panel-left,
+  .panel-right,
+  .panel-center {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .panel-left {
+    border-right: none;
+    border-bottom: 2px solid ${COLORS.Gray};
+    padding: 16px;
+  }
+
+  .panel-center {
+    min-height: 360px;
+    border-bottom: 2px solid ${COLORS.Gray};
+  }
+
+  .panel-right {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-top: none;
+    padding: 16px;
+    height: auto;
+  }
+
+  .control-grid {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 16px;
+    height: auto;
+    overflow-y: visible;
+  }
+
+  .stats-row {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .chart-container {
+    padding: 16px;
+  }
+
+  .bar-chart {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  .bar-row {
+    gap: 8px;
+  }
+
+  .bar-row > div:first-child {
+    width: 96px;
+  }
+
+  .bar-row > div:nth-child(2) {
+    min-width: 0;
+  }
+
+  .bar-row > div:last-child {
+    width: 32px;
+  }
+
+  table {
+    min-width: 640px;
+  }
+
+  .api-key-modal,
+  .full-result-modal,
+  .confirm-modal {
+    padding: 16px !important;
+  }
+
+  .api-key-modal > div,
+  .full-result-modal > div,
+  .confirm-modal > div {
+    max-width: 100% !important;
+    padding: 20px !important;
+    border-radius: 24px !important;
+  }
+
+  .full-result-modal > div {
+    gap: 20px !important;
+  }
+
+  .full-result-modal > div > div:first-child {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .full-result-modal > div > div:nth-child(2) {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 `;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2539,7 +2701,7 @@ const PRESET_MOCKS = {
       </main>
 
       {showKeyModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
+        <div className="api-key-modal" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
           <div style={{ background: COLORS.White, padding: '40px', borderRadius: '32px', width: '100%', maxWidth: '500px', margin: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ fontSize: '24px', fontWeight: '800' }}>Setup AI Engine</div>
             <div style={{ fontSize: '14px', fontWeight: '500', color: '#5E5E5E' }}>To enable real-time classification, please enter your Google Gemini API Key. This is stored only in your local browser session.</div>
@@ -2560,7 +2722,7 @@ const PRESET_MOCKS = {
       )}
 
       {isFullScreenResult && resultData && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', backdropFilter: 'blur(8px)' }} onClick={() => setIsFullScreenResult(false)}>
+        <div className="full-result-modal" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', backdropFilter: 'blur(8px)' }} onClick={() => setIsFullScreenResult(false)}>
           <div style={{ background: COLORS.White, padding: '56px', borderRadius: '40px', width: '100%', maxWidth: '800px', margin: 'auto', display: 'flex', flexDirection: 'column', gap: '32px', position: 'relative', borderTop: `16px solid ${resultData.category.color}`, boxShadow: '0 40px 80px rgba(0,0,0,0.4)', animation: 'slideUp 0.3s ease-out' }} onClick={e => e.stopPropagation()}>
             <button type="button" style={{ position: 'absolute', top: '24px', right: '32px', background: 'none', border: 'none', fontSize: '32px', cursor: 'pointer', color: '#AAA' }} onClick={() => setIsFullScreenResult(false)} aria-label="Close classification report">×</button>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2606,7 +2768,7 @@ const PRESET_MOCKS = {
 
       {/* Custom Confirmation Modal */}
       {confirmModal.show && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backdropFilter: 'blur(4px)' }}>
+        <div className="confirm-modal" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backdropFilter: 'blur(4px)' }}>
           <div style={{ background: COLORS.White, padding: '32px', borderRadius: '24px', width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', borderTop: `8px solid ${COLORS.YellowPanel}` }}>
             <div style={{ fontSize: '20px', fontWeight: '800', color: COLORS.Dark }}>{confirmModal.title}</div>
             <div style={{ fontSize: '13px', fontWeight: '500', color: '#5E5E5E', lineHeight: 1.5 }}>{confirmModal.message}</div>
