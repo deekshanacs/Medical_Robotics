@@ -466,6 +466,10 @@ input[type=range] { width: 100%; cursor: pointer; accent-color: ${COLORS.Dark}; 
 
 `;
 
+const GEMINI_API_BASE = import.meta.env.DEV
+  ? '/api/gemini'
+  : 'https://generativelanguage.googleapis.com';
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const getConfidenceColor = (conf) => {
@@ -993,7 +997,7 @@ const PRESET_MOCKS = {
         const base64Data = imagePreview.includes(',') ? imagePreview.split(',')[1] : imagePreview;
         const mimeType = imagePreview.includes(';') ? imagePreview.split(';')[0].split(':')[1] : 'image/jpeg';
         
-        const response = await fetch(`/api/gemini/v1beta/models/gemini-2.5-flash:generateContent?key=${storedKey}`, {
+        const response = await fetch(`${GEMINI_API_BASE}/v1beta/models/gemini-2.5-flash:generateContent?key=${storedKey}`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
