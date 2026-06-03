@@ -1062,25 +1062,34 @@ const PRESET_MOCKS = {
         // Auto Cycle mode: Run sequence automatically
         await runSequence({ ...mapped, category: cat.id, hazard: cat.hazard, rationale: mapped.rationale, hazardLevel: mapped.hazardLevel }, true, true);
       } else {
-        // Manual mode: enter Pending Verification step
-        const logId = Date.now() + Math.random();
-        const safeBinIndex = CATEGORIES.findIndex(c => c.id === cat.id);
-        const newLog = {
-          id: logId,
-          timestamp: Date.now(),
-          time: new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' }),
-          name: mapped.name,
-          category: cat,
-          confidence: mapped.confidence,
-          binIndex: safeBinIndex >= 0 ? safeBinIndex : 6,
-          status: 'PENDING',
-          hazardLevel: mapped.hazardLevel || (cat.hazard.toUpperCase() + ' HAZARD')
-        };
-        setLogs(prev => [newLog, ...prev].slice(0, 50));
-        setPendingResult({ ...mapped, category: cat, logId: logId });
-        setPhase('idle');
-        setPhaseLabel('PENDING VERIFICATION');
-        addToast("Specimen classified. Pending manual review.", "info");
+        const threshold = autoSortMinConfidence / 100;
+        const belowThreshold = mapped.confidence < threshold;
+
+        if (belowThreshold) {
+          // Manual mode: low-confidence results require human verification
+          const logId = Date.now() + Math.random();
+          const safeBinIndex = CATEGORIES.findIndex(c => c.id === cat.id);
+          const statusLabel = mapped.confidence < 0.70 ? 'SUPERVISOR HOLD' : 'PENDING';
+          const newLog = {
+            id: logId,
+            timestamp: Date.now(),
+            time: new Date().toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' }),
+            name: mapped.name,
+            category: cat,
+            confidence: mapped.confidence,
+            binIndex: safeBinIndex >= 0 ? safeBinIndex : 6,
+            status: statusLabel,
+            hazardLevel: mapped.hazardLevel || (cat.hazard.toUpperCase() + ' HAZARD')
+          };
+          setLogs(prev => [newLog, ...prev].slice(0, 50));
+          setPendingResult({ ...mapped, category: cat, logId: logId, status: statusLabel });
+          setPhase('idle');
+          setPhaseLabel(statusLabel === 'SUPERVISOR HOLD' ? 'SUPERVISOR HOLD' : 'PENDING VERIFICATION');
+          addToast(`Confidence ${(mapped.confidence * 100).toFixed(0)}% is below threshold (${autoSortMinConfidence}%). Pending manual review.`, "info");
+        } else {
+          // Manual mode: high-confidence results can be sorted immediately
+          await runSequence({ ...mapped, category: cat.id, hazard: cat.hazard, rationale: mapped.rationale, hazardLevel: mapped.hazardLevel, overrideStatus: 'VERIFIED' }, true, true);
+        }
       }
     } catch (e) {
       console.error(e);
